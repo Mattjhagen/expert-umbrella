@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — Orders</title>
+  <style>body{font-family:Arial;padding:20px} pre{background:#f6f6f6;padding:12px;border-radius:6px}</style>
+</head>
+<body>
+  <h1>Admin — Orders</h1>
+  <p>Provide `X-Admin-Key` header to fetch orders.</p>
+  <input id="key" placeholder="admin key" style="width:300px" />
+  <button id="load">Load Orders</button>
+  <pre id="out">No data</pre>
+
+  <script>
+    document.getElementById('load').onclick = async () => {
+      const k = document.getElementById('key').value;
+      const res = await fetch('/api/admin/orders', { headers: { 'X-Admin-Key': k } });
+      const data = await res.json();
+      document.getElementById('out').textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>

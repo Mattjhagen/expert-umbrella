@@ -22,137 +22,83 @@ A modern, responsive website for web design services featuring integrated paymen
   - 1 month support
 
 - **Professional Website**: $3,500 (one-time)
-  - Up to 10 pages
-  - Custom design
-  - Advanced SEO
-  - CMS integration
-  - 3 months support
+  # Packie Designs Backend and Studio
 
-- **Premium Website**: $4,500 (one-time)
-  - Unlimited pages
-  - E-commerce features
-  - Custom functionality
-  - Payment integration
-  - 6 months support
+  This repository contains a minimal self-serve website builder and domain reselling demo. It includes an Express backend, a simple Studio UI, a React studio scaffold, Name.com integration helpers, and starter templates.
 
-### Monthly Maintenance & Hosting
-- **Basic Maintenance**: $150/month
-  - Website hosting
-  - Security updates
-  - Backup management
-  - Basic content updates
+  Highlights
 
-- **Premium Maintenance**: $300/month
-  - Everything in Basic
-  - Performance optimization
-  - Advanced security monitoring
-  - Unlimited content updates
-  - Priority support
+  - Stripe-based payments and subscription helpers
+  - Name.com integration for domain checks, registration and DNS automation
+  - Per-user static site publishing (served under `/published`)
+  - Studio UI at `/studio/index.html` and a React visual editor scaffold at `/studio-react`
+  - Admin dashboard at `/admin` to view persisted domain orders (requires `X-Admin-Key` header)
 
-## Setup Instructions
+  Quick local setup
 
-### 1. Frontend Setup
+  1. Install dependencies:
 
-The website is ready to use with the included HTML, CSS, and JavaScript files. Simply open `index.html` in a web browser to view the site.
+  ```bash
+  npm install
+  ```
 
-### 2. Backend Setup (Required for Payment Processing)
+  2. Create environment variables (example `.env`):
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
+  ```text
+  PORT=3001
+  STRIPE_SECRET_KEY=sk_test_...
+  STRIPE_WEBHOOK_SECRET=whsec_...
+  JWT_SECRET=your_jwt_secret
+  NAMECOM_API_USERNAME=your_namecom_user
+  NAMECOM_API_TOKEN=your_namecom_token
+  ADMIN_KEY=some_admin_key
+  ```
 
-2. **Environment Variables**:
-   Create a `.env` file in the root directory with the following variables:
-   ```env
-   STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key_here
-   STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here
-   STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
-   DYNADOT_API_KEY=your_dynadot_api_key_here
-   PORT=3000
-   ```
+  3. Start the server:
 
-3. **Update Frontend Configuration**:
-   In `script.js`, update the `CONFIG` object with your actual API keys:
-   ```javascript
-   const CONFIG = {
-       STRIPE_PUBLISHABLE_KEY: 'pk_test_your_stripe_publishable_key_here',
-       DYNADOT_API_KEY: 'your_dynadot_api_key_here',
-       BACKEND_URL: 'https://your-backend-url.com/api'
-   };
-   ```
+  ```bash
+  node server.js
+  ```
 
-4. **Start the Backend Server**:
-   ```bash
-   npm start
-   ```
+  4. Open the studio UI in your browser:
 
-### 3. API Keys Setup
+  ```
+  http://localhost:3001/studio/index.html
+  ```
 
-#### Stripe Setup
-1. Create a Stripe account at [stripe.com](https://stripe.com)
-2. Get your API keys from the Stripe Dashboard
-3. Set up webhooks for payment confirmation
-4. Update the webhook endpoint URL in your Stripe dashboard
+  5. Admin UI:
 
-#### Dynadot API Setup
-1. Create a Dynadot account at [dynadot.com](https://dynadot.com)
-2. Generate an API key from your account settings
-3. The API key will be used for domain availability checking and purchasing
+  ```
+  http://localhost:3001/admin
+  ```
 
-### 4. Domain Commission Structure
+  Pushing to `expert-umbrella` remote
 
-The system includes a 15% commission on domain sales:
-- Domain price: $12.99/year (example)
-- Your commission: $1.95
-- Total customer cost: $14.94
+  To push this repository to the requested remote:
 
-## File Structure
+  ```bash
+  git remote add expert-umbrella git@github.com:Mattjhagen/expert-umbrella.git
+  git push expert-umbrella main
+  ```
 
-```
-web-design-website/
-├── index.html              # Main website file
-├── styles.css              # CSS styling
-├── script.js               # Frontend JavaScript
-├── backend-example.js      # Backend API server
-├── package.json            # Node.js dependencies
-└── README.md              # This file
-```
+  If the remote already exists, update and push:
 
-## Customization
+  ```bash
+  git remote set-url expert-umbrella git@github.com:Mattjhagen/expert-umbrella.git
+  git push expert-umbrella main
+  ```
 
-### Updating Pricing
-Edit the `PRICING` object in `script.js` to modify prices and plans.
+  Notes and caveats
 
-### Changing Colors and Styling
-Modify the CSS variables in `styles.css` to match your brand colors.
+  - Name.com and ACME flows require valid credentials and a publicly reachable server. `cert-manager.js` uses Let's Encrypt staging by default.
+  - This project uses filesystem persistence under `data/` for demo purposes. For production, migrate to a proper database and secure storage.
+  - Harden security (validation, rate limiting, secret management) before accepting real payments.
 
-### Adding Portfolio Items
-Update the portfolio section in `index.html` with your actual work samples.
+  Next steps I completed for you
 
-### Contact Information
-Update the contact details in the contact section of `index.html`.
+  - Persisting domain orders and processing them after Stripe payment success
+  - Stripe helpers for customers and subscriptions
+  - Admin orders endpoint and dashboard
+  - README and deploy/push instructions
 
-## Security Considerations
-
-- Never expose your Stripe secret key in frontend code
-- Use environment variables for all sensitive API keys
-- Implement proper error handling and validation
-- Use HTTPS in production
-- Regularly update dependencies
-
-## Production Deployment
-
-1. **Frontend**: Deploy the static files to a CDN or web hosting service
-2. **Backend**: Deploy the Node.js server to a cloud platform (Heroku, AWS, etc.)
-3. **SSL**: Ensure HTTPS is enabled for secure payment processing
-4. **Domain**: Point your domain to the deployed frontend
-5. **Webhooks**: Update Stripe webhook URLs to point to your production backend
-
-## Support
-
-For technical support or customization requests, please contact [matty@pacmacmobile.com].
-
-## License
-
-This project is licensed under the MIT License.
+  If you want me to continue, I'll proceed to implement a full visual editor, image uploads, background workers for certificate issuance, and a production-ready persistence layer.

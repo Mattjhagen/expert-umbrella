@@ -101,7 +101,7 @@ app.post('/api/create-subscription', async (req, res) => {
 });
 
 // Webhook endpoint for Stripe events
-app.post('/api/webhook', express.raw({type: 'application/json'}), (req, res) => {
+app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
 
@@ -113,18 +113,65 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), (req, res) => 
     }
 
     // Handle the event
-    switch (event.type) {
-        case 'payment_intent.succeeded':
-            const paymentIntent = event.data.object;
-            console.log('Payment succeeded:', paymentIntent.id);
-            // Handle successful payment
-            break;
-        case 'payment_method.attached':
-            const paymentMethod = event.data.object;
-            console.log('PaymentMethod was attached to a Customer!');
-            break;
-        default:
-            console.log(`Unhandled event type ${event.type}`);
+    try {
+        switch (event.type) {
+            case 'payment_intent.succeeded': {
+                const paymentIntent = event.data.object;
+                console.log('Payment succeeded:', paymentIntent.id);
+                // If this was a domain purchase, process registration
+                try {
+                    const meta = paymentIntent.metadata || {};
+                    if (meta.type === 'domain_purchase' && meta.domain) {
+                        console.log('Processing domain order for', meta.domain);
+                        const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
+                        let orders = {};
+                        if (fs.existsSync(ORDERS_FILE)) {
+                            try { orders = JSON.parse(fs.readFileSync(ORDERS_FILE)); } catch (e) { orders = {}; }
+                        }
+                        const orderKey = Object.keys(orders).find(k => orders[k].stripePaymentIntent === paymentIntent.id);
+                        if (orderKey) {
+                            orders[orderKey].status = 'paid';
+                            orders[orderKey].paidAt = new Date().toISOString();
+                            fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
+                        }
+
+                        // Attempt to register the domain via Name.com (best-effort)
+                        try {
+                            const regResult = await namecom.registerDomain(meta.domain, 1, {});
+                            console.log('Name.com register result:', regResult);
+                            if (orderKey) {
+                                orders[orderKey].namecomResult = regResult;
+                                orders[orderKey].status = regResult && regResult.error ? 'registration_failed' : 'registered';
+                                fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
+                            }
+                        } catch (regErr) {
+                            console.error('Error registering domain with Name.com:', regErr.message || regErr);
+                            if (orderKey) {
+                                orders[orderKey].namecomResult = { error: regErr.message || String(regErr) };
+                                orders[orderKey].status = 'registration_failed';
+                                fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
+                            }
+                        }
+                    }
+                } catch (processErr) {
+                    console.error('Error handling payment_intent.succeeded metadata:', processErr.message || processErr);
+                }
+                break;
+            }
+            case 'invoice.payment_succeeded':
+                console.log('Invoice payment succeeded:', event.data.object.id);
+                break;
+            case 'payment_method.attached':
+                console.log('PaymentMethod was attached to a Customer!');
+                break;
+            case 'customer.subscription.deleted':
+                console.log('Subscription canceled:', event.data.object.id);
+                break;
+            default:
+                console.log(`Unhandled event type ${event.type}`);
+        }
+    } catch (err) {
+        console.error('Error processing webhook:', err.message || err);
     }
 
     res.json({received: true});
@@ -166,7 +213,6 @@ app.post('/api/check-domain', async (req, res) => {
 app.post('/api/create-domain-payment', async (req, res) => {
     try {
         const { domain, price, currency = 'usd' } = req.body;
-        
         const paymentIntent = await stripe.paymentIntents.create({
             amount: Math.round(price * 100), // Convert to cents
             currency: currency,
@@ -176,12 +222,60 @@ app.post('/api/create-domain-payment', async (req, res) => {
             }
         });
 
-        res.json({
-            clientSecret: paymentIntent.client_secret
-        });
+        // persist order record
+        const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
+        let orders = {};
+        if (fs.existsSync(ORDERS_FILE)) {
+            try { orders = JSON.parse(fs.readFileSync(ORDERS_FILE)); } catch (e) { orders = {}; }
+        }
+        const orderId = `order_${Date.now()}`;
+        orders[orderId] = {
+            id: orderId,
+            domain,
+            price,
+            currency,
+            stripePaymentIntent: paymentIntent.id,
+            status: 'pending',
+            createdAt: new Date().toISOString()
+        };
+        fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
+
+        res.json({ clientSecret: paymentIntent.client_secret, orderId });
     } catch (error) {
         console.error('Error creating domain payment intent:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Stripe customer + subscription helper endpoints
+app.post('/api/stripe/create-customer', async (req, res) => {
+    try {
+        const { email, userId } = req.body;
+        const customer = await stripe.customers.create({ email, metadata: { userId } });
+        res.json({ customerId: customer.id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/stripe/create-subscription', async (req, res) => {
+    try {
+        const { customerId, priceId, payment_method } = req.body;
+        // attach payment method to customer
+        if (payment_method) {
+            await stripe.paymentMethods.attach(payment_method, { customer: customerId });
+            await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: payment_method } });
+        }
+
+        const subscription = await stripe.subscriptions.create({
+            customer: customerId,
+            items: [{ price: priceId }],
+            expand: ['latest_invoice.payment_intent']
+        });
+
+        res.json(subscription);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -277,6 +371,30 @@ app.post('/api/namecom/register', authMiddleware, async (req, res) => {
 
 // Serve published static sites
 app.use('/published', express.static(path.join(__dirname, 'sites')));
+
+// Admin endpoints (protected by ADMIN_KEY env var)
+function adminAuth(req, res, next) {
+    const key = req.headers['x-admin-key'] || '';
+    if (!process.env.ADMIN_KEY) return res.status(403).json({ error: 'Admin key not configured' });
+    if (key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'Invalid admin key' });
+    next();
+}
+
+app.get('/api/admin/orders', adminAuth, (req, res) => {
+    try {
+        const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
+        let orders = {};
+        if (fs.existsSync(ORDERS_FILE)) {
+            try { orders = JSON.parse(fs.readFileSync(ORDERS_FILE)); } catch (e) { orders = {}; }
+        }
+        res.json(orders);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin static dashboard
+app.use('/admin', express.static(path.join(__dirname, 'admin')));
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
