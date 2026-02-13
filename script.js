@@ -524,11 +524,11 @@ async function initializeDomainPayment(domainName, price) {
             
             try {
                 const { error } = await stripe.confirmPayment({
-                    elements,
-                    confirmParams: {
-                        return_url: `${CONFIG.BASE_URL}/success.html?domain=${encodeURIComponent(domainName)}`,
-                    },
-                });
+                elements,
+                confirmParams: {
+                    return_url: `${window.location.origin}/success.html?domain=${encodeURIComponent(domainName)}`,
+                },
+            });
                 
                 if (error) {
                     console.error('Payment failed:', error);
@@ -715,7 +715,7 @@ async function initializeStripeElements(plan) {
             const { error } = await stripe.confirmPayment({
                 elements,
                 confirmParams: {
-                    return_url: `${CONFIG.BASE_URL}/esign.html`,
+                    return_url: `${window.location.origin}/esign.html`,
                 },
             });
             
@@ -828,7 +828,7 @@ async function initializeStripeSubscription(plan) {
             const { error } = await stripe.confirmPayment({
                 elements,
                 confirmParams: {
-                    return_url: `${CONFIG.BASE_URL}/esign.html`,
+                    return_url: `${window.location.origin}/esign.html`,
                 },
             });
             
